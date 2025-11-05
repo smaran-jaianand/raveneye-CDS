@@ -1,240 +1,282 @@
-#include <iostream>
+#include "mainwindow.h"
+#include <QApplication>
+#include <QInputDialog>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QFile>
+#include <QDialog>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QLabel>
+
 #include <vector>
 #include <unordered_map>
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <limits>  // <--- this fixes numeric_limits error
 
-using namespace std;
-
-struct Connection {
-    int targetId;
-    string type;
-    int weight;
-};
-
-struct Criminal {
-    int id{};
-    string name;
-    string tag;
-    int age{};
-    string location;
-    vector<Connection> connections;
-};
-
-class RavenEye {
-private:
-    vector<Criminal> records;
-    unordered_map<int, vector<Connection>> network;
-    int nextId = 1;
-
-    unordered_map<string,int> weightMap = {
-        {"family", 10}, {"partner", 9}, {"gang member", 8},
-        {"associate", 5}, {"acquaintance", 4}, {"informant", 3}, {"rival", 2}
-    };
-
-    string toLower(const string& s) {
-        string res = s;
-        transform(res.begin(), res.end(), res.begin(), ::tolower);
-        return res;
-    }
-
-    int getConnectionWeight(const string& type) {
-        auto it = weightMap.find(toLower(type));
-        return it != weightMap.end() ? it->second : 5;
-    }
-
-    string quote(const string& s) { return "\"" + s + "\""; }
-
-    string escapeQuotes(const string& s) {
-        string res;
-        for (char c : s) {
-            if (c == '"') res += "\"\"";
-            else res += c;
-        }
-        return res;
-    }
-
+// ----------------------------------------------------------------------
+// AddPersonDialog
+// ----------------------------------------------------------------------
+class AddPersonDialog : public QDialog {
 public:
-    void addCriminal() {
-        Criminal c;
-        c.id = nextId++;
-        cout << "\nEnter Name: ";
-        cin.ignore();
-        getline(cin, c.name);
-        cout << "Enter Tag (e.g., Suspect / Gang Leader / Informant): ";
-        getline(cin, c.tag);
-        cout << "Enter Age: ";
-        cin >> c.age;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        cout << "Enter Location: ";
-        getline(cin, c.location);
-        records.push_back(c);
-        cout << "\n[+] Criminal added with ID: " << c.id << endl;
+    AddPersonDialog(QWidget* parent = nullptr) : QDialog(parent) {
+        setWindowTitle("Add Person");
+        auto *form = new QFormLayout(this);
+        nameEdit = new QLineEdit(this);
+        tagEdit = new QLineEdit(this);
+        ageSpin = new QSpinBox(this);
+        ageSpin->setRange(0,150);
+        locationEdit = new QLineEdit(this);
+        form->addRow("Name:", nameEdit);
+        form->addRow("Tag:", tagEdit);
+        form->addRow("Age:", ageSpin);
+        form->addRow("Location:", locationEdit);
+
+        auto *btnBox = new QHBoxLayout();
+        auto *ok = new QPushButton("OK", this);
+        auto *cancel = new QPushButton("Cancel", this);
+        btnBox->addWidget(ok);
+        btnBox->addWidget(cancel);
+        form->addRow(btnBox);
+
+        connect(ok, &QPushButton::clicked, this, &AddPersonDialog::accept);
+        connect(cancel, &QPushButton::clicked, this, &AddPersonDialog::reject);
     }
 
-    void addNonCriminal() {
-        Criminal c;
-        c.id = nextId++;
-        cout << "\nEnter Name: ";
-        cin.ignore();
-        getline(cin, c.name);
-        cout << "Enter Tag (e.g., Civilian, Govt, Confidential): ";
-        getline(cin, c.tag);
-        cout << "Enter Age: ";
-        cin >> c.age;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        cout << "Enter Location: ";
-        getline(cin, c.location);
-        records.push_back(c);
-        cout << "\n[+] " << c.tag << " added with ID: " << c.id << endl;
-    }
+    QString name() const { return nameEdit->text(); }
+    QString tag() const { return tagEdit->text(); }
+    int age() const { return ageSpin->value(); }
+    QString location() const { return locationEdit->text(); }
 
-    void addConnection() {
-        int id1, id2;
-        string connectionType;
-
-        cout << "\nEnter ID of first person: ";
-        cin >> id1;
-        cout << "Enter ID of second person: ";
-        cin >> id2;
-        if (id1 == id2) { cout << "[!] Cannot connect to self.\n"; return; }
-        if (id1 <= 0 || id2 <= 0 || id1 > records.size() || id2 > records.size()) {
-            cout << "[!] Invalid IDs.\n"; return;
-        }
-
-        cout << "\nConnection Types: Family, Partner, Gang Member, Associate, Acquaintance, Informant, Rival\n";
-        cout << "Enter Connection Type: ";
-        cin.ignore();
-        getline(cin, connectionType);
-        int weight = getConnectionWeight(connectionType);
-
-        // Prevent duplicate connection
-        for (auto &c : network[id1]) if (c.targetId == id2) {
-            cout << "[!] Connection already exists.\n"; return;
-        }
-
-        Connection conn1 = {id2, connectionType, weight};
-        Connection conn2 = {id1, connectionType, weight};
-        network[id1].push_back(conn1);
-        network[id2].push_back(conn2);
-        records[id1 - 1].connections.push_back(conn1);
-        records[id2 - 1].connections.push_back(conn2);
-
-        cout << "\n[+] Connection established between " << records[id1 - 1].name
-             << " and " << records[id2 - 1].name
-             << " | Type: " << connectionType << " | Weight: " << weight << endl;
-    }
-
-    void displayCriminals() {
-        cout << "\n=== All Records ===\n";
-        for (const auto &c : records) {
-            cout << "ID: " << c.id << " | Name: " << c.name
-                 << " | Tag: " << c.tag
-                 << " | Age: " << c.age
-                 << " | Location: " << c.location << endl;
-        }
-    }
-
-    void displayNetwork() {
-        cout << "\n=== Connection Network ===\n";
-        for (auto &n : network) {
-            cout << "[" << records[n.first - 1].name << "] -> ";
-            for (const auto& conn : n.second) {
-                cout << records[conn.targetId - 1].name
-                     << " (" << conn.type << ", W:" << conn.weight << "), ";
-            }
-            cout << "\n";
-        }
-    }
-
-    void saveToFile() {
-        ofstream file("RAVEN_EYE_DATABASE.csv");
-        file << "ID,Name,Tag,Age,Location,Connections\n";
-
-        for (auto &c : records) {
-            file << c.id << ","
-                 << quote(escapeQuotes(c.name)) << ","
-                 << quote(escapeQuotes(c.tag)) << ","
-                 << c.age << ","
-                 << quote(escapeQuotes(c.location)) << ",\"[";
-
-            for (size_t i = 0; i < c.connections.size(); ++i) {
-                auto &conn = c.connections[i];
-                file << conn.targetId << ":" << conn.type << ":" << conn.weight;
-                if (i != c.connections.size() - 1) file << ";";
-            }
-            file << "]\"\n";
-        }
-        cout << "\n[+] Data saved to RAVEN_EYE_DATABASE.csv\n";
-    }
-
-    void loadFromFile() {
-        ifstream file("RAVEN_EYE_DATABASE.csv");
-        if (!file.is_open()) { cout << "[!] No file found.\n"; return; }
-
-        records.clear(); network.clear(); nextId = 1;
-        string line; getline(file, line); // skip header
-
-        while (getline(file, line)) {
-            if (line.empty()) continue;
-            stringstream ss(line);
-            Criminal c; string temp, connections;
-
-            try {
-                getline(ss, temp, ','); c.id = stoi(temp); nextId = max(nextId, c.id + 1);
-                getline(ss, c.name, ','); getline(ss, c.tag, ',');
-                getline(ss, temp, ','); c.age = stoi(temp);
-                getline(ss, c.location, ','); getline(ss, connections);
-
-                if (!connections.empty() && connections.front() == '"') {
-                    connections = connections.substr(2, connections.size() - 4); // remove quotes + brackets
-                    stringstream cs(connections); string connStr;
-                    while (getline(cs, connStr, ';')) {
-                        stringstream connStream(connStr);
-                        string idStr, type, weightStr;
-                        getline(connStream, idStr, ':'); getline(connStream, type, ':'); getline(connStream, weightStr, ':');
-                        if (!idStr.empty() && !type.empty() && !weightStr.empty()) {
-                            Connection conn{stoi(idStr), type, stoi(weightStr)};
-                            c.connections.push_back(conn);
-                            network[c.id].push_back(conn);
-                        }
-                    }
-                }
-
-                records.push_back(c);
-            }
-            catch (...) { cout << "[!] Skipped line: " << line << "\n"; }
-        }
-
-        cout << "\n[+] Data loaded. " << records.size() << " records.\n";
-    }
-
-    void run() {
-        int choice;
-        while (true) {
-            cout << "\n=== RAVEN EYE SYSTEM ===\n";
-            cout << "1. Add Criminal\n2. Add Non-Criminal\n3. Add Connection\n4. Display Records\n5. Display Network\n6. Save\n7. Load\n0. Exit\n";
-            cout << "Choice: "; cin >> choice;
-            switch(choice) {
-                case 1: addCriminal(); break;
-                case 2: addNonCriminal(); break;
-                case 3: addConnection(); break;
-                case 4: displayCriminals(); break;
-                case 5: displayNetwork(); break;
-                case 6: saveToFile(); break;
-                case 7: loadFromFile(); break;
-                case 0: cout << "Exiting...\n"; return;
-                default: cout << "[!] Invalid choice.\n";
-            }
-        }
-    }
+private:
+    QLineEdit *nameEdit;
+    QLineEdit *tagEdit;
+    QSpinBox *ageSpin;
+    QLineEdit *locationEdit;
 };
 
-int main() {
-    RavenEye system;
-    system.run();
-    return 0;
+// ----------------------------------------------------------------------
+// AddConnectionDialog
+// ----------------------------------------------------------------------
+class AddConnectionDialog : public QDialog {
+public:
+    AddConnectionDialog(const QStringList &names, QWidget* parent = nullptr) : QDialog(parent) {
+        setWindowTitle("Add Connection");
+        auto *form = new QFormLayout(this);
+        comboA = new QComboBox(this);
+        comboB = new QComboBox(this);
+        comboA->addItems(names);
+        comboB->addItems(names);
+        typeEdit = new QLineEdit(this);
+        weightSpin = new QSpinBox(this);
+        weightSpin->setRange(0, 100);
+        form->addRow("Person A:", comboA);
+        form->addRow("Person B:", comboB);
+        form->addRow("Type:", typeEdit);
+        form->addRow("Weight:", weightSpin);
+
+        auto *btnBox = new QHBoxLayout();
+        auto *ok = new QPushButton("OK", this);
+        auto *cancel = new QPushButton("Cancel", this);
+        btnBox->addWidget(ok);
+        btnBox->addWidget(cancel);
+        form->addRow(btnBox);
+
+        connect(ok, &QPushButton::clicked, this, &AddConnectionDialog::onOk);
+        connect(cancel, &QPushButton::clicked, this, &AddConnectionDialog::reject);
+    }
+
+    int indexA() const { return comboA->currentIndex(); }
+    int indexB() const { return comboB->currentIndex(); }
+    QString type() const { return typeEdit->text(); }
+    int weight() const { return weightSpin->value(); }
+
+private:
+    void onOk() {
+        if (comboA->currentIndex() == comboB->currentIndex()) {
+            QMessageBox::warning(this, "Invalid", "Cannot connect a person to themselves.");
+            return;
+        }
+        if (typeEdit->text().isEmpty()) {
+            QMessageBox::warning(this, "Invalid", "Enter connection type.");
+            return;
+        }
+        accept();
+    }
+
+    QComboBox *comboA;
+    QComboBox *comboB;
+    QLineEdit *typeEdit;
+    QSpinBox *weightSpin;
+};
+
+// ----------------------------------------------------------------------
+// MainWindow Implementation (uses types from mainwindow.h)
+// ----------------------------------------------------------------------
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+    setWindowTitle("RavenEye - GUI");
+    auto *central = new QWidget(this);
+    auto *mainLayout = new QHBoxLayout(central);
+
+    listWidget = new QListWidget(this);
+    mainLayout->addWidget(listWidget, 2);
+
+    auto *right = new QWidget(this);
+    auto *rv = new QVBoxLayout(right);
+    btnAdd = new QPushButton("Add Person", this);
+    btnAddConnection = new QPushButton("Add Connection", this);
+    btnSave = new QPushButton("Save", this);
+    btnLoad = new QPushButton("Load", this);
+    detailLabel = new QLabel("Select a person to see details", this);
+    detailLabel->setWordWrap(true);
+
+    rv->addWidget(btnAdd);
+    rv->addWidget(btnAddConnection);
+    rv->addWidget(btnSave);
+    rv->addWidget(btnLoad);
+    rv->addWidget(detailLabel);
+    rv->addStretch();
+
+    mainLayout->addWidget(right, 3);
+    setCentralWidget(central);
+
+    connect(btnAdd, &QPushButton::clicked, this, &MainWindow::onAddPerson);
+    connect(btnAddConnection, &QPushButton::clicked, this, &MainWindow::onAddConnection);
+    connect(btnSave, &QPushButton::clicked, this, &MainWindow::onSave);
+    connect(btnLoad, &QPushButton::clicked, this, &MainWindow::onLoad);
+    connect(listWidget, &QListWidget::currentRowChanged, this, &MainWindow::onSelectionChanged);
+}
+
+void MainWindow::onAddPerson() {
+    AddPersonDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        Criminal c;
+        c.id = nextId++;
+        c.name = dlg.name();
+        c.tag = dlg.tag();
+        c.age = dlg.age();
+        c.location = dlg.location();
+        records.push_back(c);
+        refreshList();
+    }
+}
+
+void MainWindow::onAddConnection() {
+    if (records.size() < 2) {
+        QMessageBox::warning(this, "Need 2+ people", "Add at least two people first.");
+        return;
+    }
+    QStringList names;
+    for (auto &r : records) names << r.name;
+    AddConnectionDialog dlg(names, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        int a = dlg.indexA();
+        int b = dlg.indexB();
+        Connection c1{records[b].id, dlg.type(), dlg.weight()};
+        Connection c2{records[a].id, dlg.type(), dlg.weight()};
+        records[a].connections.push_back(c1);
+        records[b].connections.push_back(c2);
+        refreshList();
+    }
+}
+
+void MainWindow::onSave() {
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Database", "", "JSON Files (*.json)");
+    if (fileName.isEmpty()) return;
+    QJsonArray arr;
+    for (auto &r : records) {
+        QJsonObject obj;
+        obj["id"] = r.id;
+        obj["name"] = r.name;
+        obj["tag"] = r.tag;
+        obj["age"] = r.age;
+        obj["location"] = r.location;
+        QJsonArray conArr;
+        for (auto &c : r.connections) {
+            QJsonObject co;
+            co["targetId"] = c.targetId;
+            co["type"] = c.type;
+            co["weight"] = c.weight;
+            conArr.append(co);
+        }
+        obj["connections"] = conArr;
+        arr.append(obj);
+    }
+    QJsonDocument doc(arr);
+    QFile f(fileName);
+    if (!f.open(QIODevice::WriteOnly)) { QMessageBox::warning(this, "Error", "Can't open file for writing"); return; }
+    f.write(doc.toJson());
+    f.close();
+}
+
+void MainWindow::onLoad() {
+    QString fileName = QFileDialog::getOpenFileName(this, "Load Database", "", "JSON Files (*.json)");
+    if (fileName.isEmpty()) return;
+    QFile f(fileName);
+    if (!f.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, "Error", "Can't open file"); return; }
+    QByteArray data = f.readAll();
+    f.close();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isArray()) { QMessageBox::warning(this, "Error", "Invalid file format"); return; }
+    records.clear();
+    nextId = 1;
+    QJsonArray arr = doc.array();
+    for (auto v : arr) {
+        QJsonObject obj = v.toObject();
+        Criminal r;
+        r.id = obj["id"].toInt();
+        r.name = obj["name"].toString();
+        r.tag = obj["tag"].toString();
+        r.age = obj["age"].toInt();
+        r.location = obj["location"].toString();
+        nextId = std::max(nextId, r.id + 1);
+        QJsonArray conArr = obj["connections"].toArray();
+        for (auto cval : conArr) {
+            QJsonObject co = cval.toObject();
+            Connection c{co["targetId"].toInt(), co["type"].toString(), co["weight"].toInt()};
+            r.connections.push_back(c);
+        }
+        records.push_back(r);
+    }
+    refreshList();
+}
+
+void MainWindow::onSelectionChanged(int row) {
+    if (row < 0 || row >= (int)records.size()) {
+        detailLabel->setText("Select a person to see details");
+        return;
+    }
+    auto &r = records[row];
+    QString details = QString("ID: %1\nName: %2\nTag: %3\nAge: %4\nLocation: %5\nConnections:\n")
+                      .arg(r.id).arg(r.name).arg(r.tag).arg(r.age).arg(r.location);
+    for (auto &c : r.connections) {
+        QString targetName = nameById(c.targetId);
+        details += QString("  - %1 (Type: %2, W:%3)\n").arg(targetName).arg(c.type).arg(c.weight);
+    }
+    detailLabel->setText(details);
+}
+
+QString MainWindow::nameById(int id) const {
+    for (auto &r : records) if (r.id == id) return r.name;
+    return "<unknown>";
+}
+
+void MainWindow::refreshList() {
+    listWidget->clear();
+    for (auto &r : records)
+        listWidget->addItem(QString("%1: %2 (%3)").arg(r.id).arg(r.name).arg(r.tag));
+}
+
+// ----------------------------------------------------------------------
+// main()
+// ----------------------------------------------------------------------
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+    MainWindow w;
+    w.resize(800, 480);
+    w.show();
+    return app.exec();
 }
