@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>RavenEye — 3D Network</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Load Three.js + 3d-force-graph from CDN -->
+    <script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+</head>
+<body>
+<div id="graph"></div>
+
+<div id="ui">
+    <input id="search" placeholder="Search name or id" />
+    <button id="fit">Fit</button>
+    <label>Min Weight: <input id="minWeight" type="range" min="0" max="10" value="0" /></label>
+    <div id="status">Status: idle</div>
+</div>
+
+<script src="graph.js"></script>
+</body>
+</html>
