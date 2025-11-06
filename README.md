@@ -169,17 +169,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets)
 
 ---
 
-## 🧾 License
-
-**MIT License © 2025 Smaran**  
-Free to use, modify, and distribute for educational & non-commercial use.
-
----
-
 ## 💬 Credits
 
-Developed by **Smaran**  
-Driven by logic, precision, and ruthless execution.
+Developed by **Smaran** and **Sujay** 
 
 ---
 
